@@ -8,3 +8,6 @@ https://godoc.org/github.com/tmc/circleci
 
 Please reference the godoc link above for api documentation.
 
+Commands:
+
+cmd/get-circle-workflow - get a json representation of a circleci workflow

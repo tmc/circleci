@@ -2,6 +2,7 @@ package circleci
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,20 +47,21 @@ func (c *Client) url(path string) string {
 	return fmt.Sprintf("%s%s", c.baseURL, path)
 }
 
-func (c *Client) get(pattern string, args ...interface{}) ([]byte, error) {
-	return c.do("GET", nil, pattern, args...)
+func (c *Client) get(ctx context.Context, pattern string, args ...interface{}) ([]byte, error) {
+	return c.do(ctx, "GET", nil, pattern, args...)
 }
 
-func (c *Client) post(payload io.Reader, pattern string, args ...interface{}) ([]byte, error) {
-	return c.do("POST", payload, pattern, args...)
+func (c *Client) post(ctx context.Context, payload io.Reader, pattern string, args ...interface{}) ([]byte, error) {
+	return c.do(ctx, "POST", payload, pattern, args...)
 }
 
-func (c *Client) do(method string, body io.Reader, pattern string, args ...interface{}) ([]byte, error) {
+func (c *Client) do(ctx context.Context, method string, body io.Reader, pattern string, args ...interface{}) ([]byte, error) {
 	path := c.url(fmt.Sprintf(pattern, args...))
 	req, err := http.NewRequest(method, path, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating request")
 	}
+	req = req.WithContext(ctx)
 	//req.Header.Add("cookie", fmt.Sprintf("token=%v", c.token))
 	req.Header.Add("Cookie", fmt.Sprintf("ring-session=%v", c.sessionToken))
 	req.Header.Add("Accept", "application/transit+json; charset=UTF-8")
@@ -97,10 +99,10 @@ func (c *Client) do(method string, body io.Reader, pattern string, args ...inter
 }
 
 // GetWorkflow returns a workflow given a workflow id. Must be authenticated with a session token.
-func (c *Client) GetWorkflow(workflowID string) (*circletypes.Workflow, error) {
+func (c *Client) GetWorkflow(ctx context.Context, workflowID string) (*circletypes.Workflow, error) {
 	payload := strings.NewReader(fmt.Sprintf(`["^ ","~:type","~:get-workflow-status","~:params",["^ ","~:run/id","~u%v"]]`, workflowID))
 
-	buf, err := c.post(payload, "")
+	buf, err := c.post(ctx, payload, "")
 	if err != nil {
 		return nil, errors.Wrap(err, "issue posting")
 	}

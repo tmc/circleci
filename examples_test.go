@@ -1,6 +1,7 @@
 package circleci_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -13,7 +14,7 @@ func ExampleNewClient() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	foo, err := c.GetWorkflow("")
+	foo, err := c.GetWorkflow(context.Background(), "")
 	fmt.Printf("%T")
 	// output:
 	// Foo
