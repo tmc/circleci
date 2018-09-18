@@ -7,19 +7,24 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/russolsen/transit"
 	"github.com/sirupsen/logrus"
+	"github.com/tmc/circleci/circletypes"
+	"github.com/tmc/transitutils"
 )
 
-const defaultBaseURL = "https://www.circleci.com/api/v3/"
+const defaultBaseURL = "https://circleci.com/query-api"
 
 // Client is the primary type that implements an interface to the circleci.com API.
 type Client struct {
-	baseURL string
-	token   string
-	client  *http.Client
-	logger  Logger
+	baseURL      string
+	token        string
+	sessionToken string
+	client       *http.Client
+	logger       Logger
 }
 
 // NewClient initializes a new Client.
@@ -45,13 +50,8 @@ func (c *Client) get(pattern string, args ...interface{}) ([]byte, error) {
 	return c.do("GET", nil, pattern, args...)
 }
 
-func (c *Client) post(payload interface{}, pattern string, args ...interface{}) ([]byte, error) {
-	buf := new(bytes.Buffer)
-	if err := json.NewEncoder(buf).Encode(payload); err != nil {
-		return nil, err
-	}
-	c.logger.WithField("fn", "post").Debugln(buf.String())
-	return c.do("POST", buf, pattern, args...)
+func (c *Client) post(payload io.Reader, pattern string, args ...interface{}) ([]byte, error) {
+	return c.do("POST", payload, pattern, args...)
 }
 
 func (c *Client) do(method string, body io.Reader, pattern string, args ...interface{}) ([]byte, error) {
@@ -60,11 +60,20 @@ func (c *Client) do(method string, body io.Reader, pattern string, args ...inter
 	if err != nil {
 		return nil, errors.Wrap(err, "creating request")
 	}
-	req.Header.Set("cookie", fmt.Sprintf("token=%v", c.token))
+	//req.Header.Add("cookie", fmt.Sprintf("token=%v", c.token))
+	req.Header.Add("Cookie", fmt.Sprintf("ring-session=%v", c.sessionToken))
+	req.Header.Add("Accept", "application/transit+json; charset=UTF-8")
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", "application/transit+json")
 	}
-
+	/*
+		requestDump, err := httputil.DumpRequest(req, true)
+		if err != nil {
+			fmt.Println(err)
+			return nil, errors.Wrap(err, "dumping request")
+		}
+		fmt.Println(string(requestDump))
+	*/
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "performing request")
@@ -85,4 +94,29 @@ func (c *Client) do(method string, body io.Reader, pattern string, args ...inter
 		}
 	}
 	return buf, nil
+}
+
+// GetWorkflow returns a workflow given a workflow id. Must be authenticated with a session token.
+func (c *Client) GetWorkflow(workflowID string) (*circletypes.Workflow, error) {
+	payload := strings.NewReader(fmt.Sprintf(`["^ ","~:type","~:get-workflow-status","~:params",["^ ","~:run/id","~u%v"]]`, workflowID))
+
+	buf, err := c.post(payload, "")
+	if err != nil {
+		return nil, errors.Wrap(err, "issue posting")
+	}
+	value, err := transit.NewDecoder(bytes.NewReader(buf)).Decode()
+	if err != nil {
+		return nil, errors.Wrap(err, "issue decoding transit")
+	}
+	v, err := transitutils.ToGo(value)
+	if err != nil {
+		return nil, errors.Wrap(err, "issue converting transit to go")
+	}
+	j, err := json.Marshal(v)
+	if err != nil {
+		return nil, errors.Wrap(err, "issue marshaling")
+	}
+	result := &circletypes.Workflow{}
+	err = json.Unmarshal(j, result)
+	return result, errors.Wrap(err, "issue unmarshaling")
 }

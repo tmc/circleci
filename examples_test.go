@@ -13,7 +13,7 @@ func ExampleNewClient() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	foo, err := c.GetFoo()
+	foo, err := c.GetWorkflow("")
 	fmt.Printf("%T")
 	// output:
 	// Foo

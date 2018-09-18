@@ -23,6 +23,13 @@ func WithToken(token string) ClientOption {
 	}
 }
 
+// WithSessionToken allows configuration on of a web authentication token to allow the use of undocumented endpoints. Use the value of the `ring-session` cookie.
+func WithSessionToken(token string) ClientOption {
+	return func(c *Client) {
+		c.sessionToken = token
+	}
+}
+
 // WithHTTPClient allows customization of the http.Client that is used for API communication.
 func WithHTTPClient(client *http.Client) ClientOption {
 	return func(c *Client) {
